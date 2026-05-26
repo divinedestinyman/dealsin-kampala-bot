@@ -14,7 +14,7 @@ export function getBot(): Bot {
   // /start
   _bot.command("start", async (ctx) => {
     await ctx.reply(
-      `👋 Welcome to *DealsinKampala Bot*\\!\n\n` +
+      `👋 Welcome to *DealsInKampala Bot*\\!\n\n` +
         `Uganda's most trusted marketplace — buy and sell safely in Kampala\\.\n\n` +
         `*What can I do?*\n` +
         `/search \\[keyword\\] — Find listings by keyword\n` +
@@ -23,7 +23,7 @@ export function getBot(): Bot {
         `/rate — Rate a seller after a deal\n` +
         `/report — Report a problem or fake listing\n` +
         `/help — Show this menu again\n\n` +
-        `💬 Join our community: t\\.me/DealsinKampalaChannel`,
+        `💬 Join our community: t\\.me/DealsInKampalaChannel`,
       { parse_mode: "MarkdownV2" }
     );
   });
@@ -31,15 +31,15 @@ export function getBot(): Bot {
   // /help
   _bot.command("help", async (ctx) => {
     await ctx.reply(
-      `*DealsinKampala Bot — Commands*\n\n` +
+      `*DealsInKampala Bot — Commands*\n\n` +
         `/search \\[keyword\\] — Search listings \\(e\\.g\\. /search iPhone\\)\n` +
         `/agents \\[area\\] — Find nearest payment agent \\(e\\.g\\. /agents Ntinda\\)\n` +
         `/submit — Submit a new listing\n` +
         `/rate — Rate a completed deal\n` +
         `/report — Report a scam or problem\n` +
         `/mydeals — View your active deals\n\n` +
-        `📢 Deal alerts: t\\.me/DealsinKampalaChannel\n` +
-        `🌐 Website: dealsinKampala\\.com \\(coming soon\\)`,
+        `📢 Deal alerts: t\\.me/DealsInKampalaChannel\n` +
+        `🌐 Website: dealsInKampala\\.com \\(coming soon\\)`,
       { parse_mode: "MarkdownV2" }
     );
   });
@@ -110,7 +110,7 @@ export function getBot(): Bot {
     await ctx.reply(
       `🔍 Searching for "*${keyword.replace(/[.!()-]/g, "\\$&")}*"\\.\\.\\.\n\n` +
         `📱 Browse matching listings in our Facebook group:\n` +
-        `Or check our Telegram channel: t\\.me/DealsinKampalaChannel\n\n` +
+        `Or check our Telegram channel: t\\.me/DealsInKampalaChannel\n\n` +
         `_Full in\\-bot search launching soon\\!_`,
       { parse_mode: "MarkdownV2", reply_markup: keyboard }
     );

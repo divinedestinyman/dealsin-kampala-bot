@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "DealsinKampala Bot",
+  title: "DealsInKampala Bot",
   description: "Telegram bot webhook server",
 };
 
