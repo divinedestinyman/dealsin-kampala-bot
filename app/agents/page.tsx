@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
-import { AGENTS } from "../../lib/agents";
+import { getAllActiveAgents } from "../../lib/queries";
 import type { Agent } from "../../lib/types";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Verified Escrow Agents",
@@ -8,9 +10,10 @@ export const metadata: Metadata = {
     "Find a verified escrow agent near you in Kampala. Our agents hold payment in trust so your deal is always safe.",
 };
 
-export default function AgentsPage() {
-  const verifiedAgents = AGENTS.filter((a) => a.verified);
-  const pendingAgents = AGENTS.filter((a) => !a.verified);
+export default async function AgentsPage() {
+  const allAgents = await getAllActiveAgents();
+  const verifiedAgents = allAgents.filter((a) => a.verified);
+  const pendingAgents = allAgents.filter((a) => !a.verified);
 
   return (
     <div style={{ maxWidth: 1200, margin: "0 auto", padding: "2rem 1.25rem" }}>

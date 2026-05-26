@@ -1,29 +1,29 @@
 export type DealCategory =
+  | "phones"
   | "electronics"
   | "vehicles"
   | "property"
-  | "clothing"
-  | "furniture"
-  | "phones"
+  | "fashion"
+  | "home"
   | "services"
   | "other";
 
-export type DealStatus = "active" | "sold" | "pending";
+export type DealStatus = "active" | "sold" | "pending" | "expired";
 
 export interface Deal {
   id: string;
   title: string;
   description: string;
   price: number;
-  currency: "UGX";
+  currency?: "UGX";
   category: DealCategory;
   status: DealStatus;
   location: string;
   sellerName: string;
   sellerTelegram: string;
-  sellerPhone: string;
-  images: string[];
-  createdAt: string;
+  sellerPhone?: string | null;
+  photos?: string[];
+  createdAt?: string;
   featured: boolean;
   verified: boolean;
 }

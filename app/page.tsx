@@ -1,9 +1,13 @@
 import Link from "next/link";
-import { getFeaturedDeals, formatPrice, CATEGORIES } from "../lib/data";
+import { formatPrice, CATEGORIES } from "../lib/data";
+import { getFeaturedDeals } from "../lib/queries";
 import type { Deal } from "../lib/types";
 
-export default function HomePage() {
-  const featured = getFeaturedDeals();
+// force-dynamic: DB is queried per-request; no build-time pre-render needed.
+export const dynamic = "force-dynamic";
+
+export default async function HomePage() {
+  const featured = await getFeaturedDeals();
 
   return (
     <>

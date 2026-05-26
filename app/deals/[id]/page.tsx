@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDealById, formatPrice, DEALS } from "../../../lib/data";
+import { formatPrice } from "../../../lib/data";
+import { getDealById, getAllDealIds } from "../../../lib/queries";
+
+// ISR — deal pages update within 60s when DB changes
+export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -9,7 +13,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { id } = await params;
-  const deal = getDealById(id);
+  const deal = await getDealById(id);
   if (!deal) return { title: "Deal not found" };
   return {
     title: deal.title,
@@ -17,13 +21,21 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export function generateStaticParams() {
-  return DEALS.map((d) => ({ id: d.id }));
+// Pre-render existing DB deals at build time; new deals render on first request.
+// Wrapped in try/catch so the build succeeds even when the DB is unreachable
+// (e.g. CI environment). ISR (revalidate=60) handles serving all pages.
+export async function generateStaticParams() {
+  try {
+    const ids = await getAllDealIds();
+    return ids.map((id) => ({ id }));
+  } catch {
+    return [];
+  }
 }
 
 export default async function DealDetailPage({ params }: PageProps) {
   const { id } = await params;
-  const deal = getDealById(id);
+  const deal = await getDealById(id);
 
   if (!deal) notFound();
 
@@ -52,7 +64,7 @@ export default async function DealDetailPage({ params }: PageProps) {
   const color = categoryColors[deal.category] ?? "#6B7280";
   const emoji = categoryEmojis[deal.category] ?? "📦";
 
-  const postedDate = new Date(deal.createdAt).toLocaleDateString("en-UG", {
+  const postedDate = new Date(deal.createdAt ?? Date.now()).toLocaleDateString("en-UG", {
     day: "numeric",
     month: "long",
     year: "numeric",

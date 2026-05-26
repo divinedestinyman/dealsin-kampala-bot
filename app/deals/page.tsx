@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { DEALS, searchDeals, getDealsByCategory, formatPrice, CATEGORIES } from "../../lib/data";
+import { formatPrice, CATEGORIES } from "../../lib/data";
+import {
+  searchDeals,
+  getDealsByCategory,
+  getAllActiveDeals,
+} from "../../lib/queries";
 import { DealCard } from "../page";
-import type { Deal } from "../../lib/types";
+
+export const dynamic = "force-dynamic"; // DB-backed — render per-request, no build-time pre-render
 
 export const metadata: Metadata = {
   title: "Browse Deals",
@@ -17,18 +23,18 @@ export default async function DealsPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const { search, category } = params;
 
-  let deals: Deal[];
+  let deals: import("../../lib/types").Deal[];
   let pageTitle = "All Deals";
 
   if (search) {
-    deals = searchDeals(search);
+    deals = await searchDeals(search);
     pageTitle = `Results for "${search}"`;
   } else if (category) {
-    deals = getDealsByCategory(category);
+    deals = await getDealsByCategory(category);
     const cat = CATEGORIES.find((c) => c.value === category);
     pageTitle = cat ? `${cat.emoji} ${cat.label}` : "Deals";
   } else {
-    deals = DEALS.filter((d) => d.status === "active");
+    deals = await getAllActiveDeals();
     pageTitle = "All Deals";
   }
 

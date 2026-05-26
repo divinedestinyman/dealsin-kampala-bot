@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDealById } from "../../../../lib/data";
-import type { ApiResponse, Deal } from "../../../../lib/types";
+import { db } from "../../../../lib/db";
+import { deals } from "../../../../lib/schema";
+import { eq } from "drizzle-orm";
+import type { ApiResponse } from "../../../../lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -9,20 +11,30 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const deal = getDealById(id);
 
-  if (!deal) {
+  try {
+    const [deal] = await db
+      .select()
+      .from(deals)
+      .where(eq(deals.id, id))
+      .limit(1);
+
+    if (!deal) {
+      const response: ApiResponse<null> = {
+        success: false,
+        error: `Deal "${id}" not found`,
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
+    const response: ApiResponse<typeof deal> = { success: true, data: deal };
+    return NextResponse.json(response);
+  } catch (err) {
+    console.error(`[/api/deals/${id} GET]`, err);
     const response: ApiResponse<null> = {
       success: false,
-      error: `Deal "${id}" not found`,
+      error: "Failed to fetch deal",
     };
-    return NextResponse.json(response, { status: 404 });
+    return NextResponse.json(response, { status: 500 });
   }
-
-  const response: ApiResponse<Deal> = {
-    success: true,
-    data: deal,
-  };
-
-  return NextResponse.json(response);
 }
