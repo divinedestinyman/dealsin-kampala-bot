@@ -1,5 +1,13 @@
 import { Bot, InlineKeyboard } from "grammy";
-import { AGENTS, findAgentsByArea, formatAgent } from "./agents";
+import {
+  searchDeals,
+  findAgentsByArea,
+  getAgentAreas,
+  countActiveDeals,
+  getDealsByTelegram,
+  formatDealMd,
+  formatAgentMd,
+} from "./queries";
 
 let _bot: Bot | null = null;
 
@@ -11,15 +19,25 @@ export function getBot(): Bot {
 
   _bot = new Bot(token);
 
-  // /start
+  // ─── /start ───────────────────────────────────────────────────────────────
   _bot.command("start", async (ctx) => {
+    let dealCount = "";
+    try {
+      const n = await countActiveDeals();
+      dealCount = `\n📦 *${n} active listings* live right now\\.\n`;
+    } catch {
+      // non-critical — welcome message still sends without the count
+    }
+
     await ctx.reply(
       `👋 Welcome to *DealsInKampala Bot*\\!\n\n` +
-        `Uganda's most trusted marketplace — buy and sell safely in Kampala\\.\n\n` +
-        `*What can I do?*\n` +
+        `Uganda's most trusted marketplace — buy and sell safely in Kampala\\.` +
+        dealCount +
+        `\n*What can I do?*\n` +
         `/search \\[keyword\\] — Find listings by keyword\n` +
         `/agents \\[area\\] — Find a payment agent near you\n` +
         `/submit — List an item for sale\n` +
+        `/mydeals — View your active listings\n` +
         `/rate — Rate a seller after a deal\n` +
         `/report — Report a problem or fake listing\n` +
         `/help — Show this menu again\n\n` +
@@ -28,63 +46,88 @@ export function getBot(): Bot {
     );
   });
 
-  // /help
+  // ─── /help ────────────────────────────────────────────────────────────────
   _bot.command("help", async (ctx) => {
     await ctx.reply(
       `*DealsInKampala Bot — Commands*\n\n` +
         `/search \\[keyword\\] — Search listings \\(e\\.g\\. /search iPhone\\)\n` +
         `/agents \\[area\\] — Find nearest payment agent \\(e\\.g\\. /agents Ntinda\\)\n` +
         `/submit — Submit a new listing\n` +
+        `/mydeals — View your active deals\n` +
         `/rate — Rate a completed deal\n` +
-        `/report — Report a scam or problem\n` +
-        `/mydeals — View your active deals\n\n` +
+        `/report — Report a scam or problem\n\n` +
         `📢 Deal alerts: t\\.me/DealsInKampalaChannel\n` +
-        `🌐 Website: dealsInKampala\\.com \\(coming soon\\)`,
+        `🌐 Website: dealsinkampala\\.vercel\\.app`,
       { parse_mode: "MarkdownV2" }
     );
   });
 
-  // /agents [area]
+  // ─── /agents [area] ───────────────────────────────────────────────────────
   _bot.command("agents", async (ctx) => {
     const query = ctx.match?.trim();
 
     if (!query) {
-      const allAreas = [...new Set(AGENTS.map((a) => a.area))].join(", ");
-      await ctx.reply(
-        `📍 *Find a payment agent near you*\n\n` +
-          `Usage: /agents \\[your area\\]\n` +
-          `Example: /agents Ntinda\n\n` +
-          `Available areas: ${allAreas.replace(/[.!()-]/g, "\\$&")}\n\n` +
-          `_Agents hold your MoMo payment safely until delivery is confirmed\\._`,
-        { parse_mode: "MarkdownV2" }
-      );
+      try {
+        const areas = await getAgentAreas();
+        const areaList =
+          areas.length > 0
+            ? areas.join(", ").replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`)
+            : "Ntinda, Nakawa, Kampala Central";
+
+        await ctx.reply(
+          `📍 *Find a payment agent near you*\n\n` +
+            `Usage: /agents \\[your area\\]\n` +
+            `Example: /agents Ntinda\n\n` +
+            `Available areas: ${areaList}\n\n` +
+            `_Agents hold your MoMo payment safely until delivery is confirmed\\._`,
+          { parse_mode: "MarkdownV2" }
+        );
+      } catch {
+        await ctx.reply(
+          `📍 *Find a payment agent near you*\n\n` +
+            `Usage: /agents \\[your area\\]\n` +
+            `Example: /agents Ntinda\n\n` +
+            `_Agents hold your MoMo payment safely until delivery is confirmed\\._`,
+          { parse_mode: "MarkdownV2" }
+        );
+      }
       return;
     }
 
-    const found = findAgentsByArea(query);
+    try {
+      const found = await findAgentsByArea(query);
 
-    if (found.length === 0) {
+      if (found.length === 0) {
+        await ctx.reply(
+          `❌ No agents found near *${query.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`)}*\\.\n\n` +
+            `Try a nearby area or use /agents to see all available areas\\.`,
+          { parse_mode: "MarkdownV2" }
+        );
+        return;
+      }
+
+      await ctx.reply(`🔍 Found ${found.length} agent\\(s\\) near *${query.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`)}*:`, {
+        parse_mode: "MarkdownV2",
+      });
+
+      for (const agent of found) {
+        await ctx.reply(formatAgentMd(agent), { parse_mode: "MarkdownV2" });
+      }
+
       await ctx.reply(
-        `❌ No agents found in "${query}"\\.\\n\\n` +
-          `Try a nearby area or use /agents without a keyword to see all areas\\.`,
+        `_To use an agent: send MoMo to their number, then ask them to confirm via Telegram\\._`,
         { parse_mode: "MarkdownV2" }
       );
-      return;
+    } catch (err) {
+      console.error("[/agents] DB error:", err);
+      await ctx.reply(
+        `⚠️ Could not load agents right now\\. Please try again in a moment\\.`,
+        { parse_mode: "MarkdownV2" }
+      );
     }
-
-    await ctx.reply(`🔍 Found ${found.length} agent(s) near "${query}":`);
-
-    for (const agent of found.slice(0, 3)) {
-      await ctx.reply(formatAgent(agent));
-    }
-
-    await ctx.reply(
-      `_To use an agent: send MoMo to their number, then ask them to confirm via Telegram\\._`,
-      { parse_mode: "MarkdownV2" }
-    );
   });
 
-  // /search [keyword]
+  // ─── /search [keyword] ────────────────────────────────────────────────────
   _bot.command("search", async (ctx) => {
     const keyword = ctx.match?.trim();
 
@@ -96,27 +139,100 @@ export function getBot(): Bot {
           `• /search iPhone 13\n` +
           `• /search Toyota Premio\n` +
           `• /search 2 bedroom apartment\n\n` +
-          `_Search connects to our Facebook group and Telegram listings\\._`,
+          `_I'll search our live database of active listings\\._`,
         { parse_mode: "MarkdownV2" }
       );
       return;
     }
 
-    const keyboard = new InlineKeyboard().url(
-      `Search "${keyword}" on Facebook`,
-      `https://www.facebook.com/groups/255230365959060/search/?q=${encodeURIComponent(keyword)}`
-    );
+    try {
+      const results = await searchDeals(keyword);
 
-    await ctx.reply(
-      `🔍 Searching for "*${keyword.replace(/[.!()-]/g, "\\$&")}*"\\.\\.\\.\n\n` +
-        `📱 Browse matching listings in our Facebook group:\n` +
-        `Or check our Telegram channel: t\\.me/DealsInKampalaChannel\n\n` +
-        `_Full in\\-bot search launching soon\\!_`,
-      { parse_mode: "MarkdownV2", reply_markup: keyboard }
-    );
+      if (results.length === 0) {
+        const fbUrl = `https://www.facebook.com/groups/255230365959060/search/?q=${encodeURIComponent(keyword)}`;
+        const keyboard = new InlineKeyboard().url(
+          `Search "${keyword}" on Facebook`,
+          fbUrl
+        );
+        await ctx.reply(
+          `❌ No listings found for *${keyword.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`)}*\\.\n\n` +
+            `Try a different keyword, or search our Facebook group:`,
+          { parse_mode: "MarkdownV2", reply_markup: keyboard }
+        );
+        return;
+      }
+
+      const keywordEsc = keyword.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`);
+      await ctx.reply(
+        `🔍 Found *${results.length}* listing\\(s\\) for *${keywordEsc}*:`,
+        { parse_mode: "MarkdownV2" }
+      );
+
+      for (const deal of results.slice(0, 5)) {
+        await ctx.reply(formatDealMd(deal), { parse_mode: "MarkdownV2" });
+      }
+
+      if (results.length > 5) {
+        await ctx.reply(
+          `_Showing top 5 of ${results.length} results\\. Narrow your search for more specific results\\._`,
+          { parse_mode: "MarkdownV2" }
+        );
+      }
+    } catch (err) {
+      console.error("[/search] DB error:", err);
+      await ctx.reply(
+        `⚠️ Search is temporarily unavailable\\. Please try again in a moment\\.`,
+        { parse_mode: "MarkdownV2" }
+      );
+    }
   });
 
-  // /submit
+  // ─── /mydeals ─────────────────────────────────────────────────────────────
+  _bot.command("mydeals", async (ctx) => {
+    const username = ctx.from?.username;
+
+    if (!username) {
+      await ctx.reply(
+        `📦 *My Deals*\n\n` +
+          `To view your deals, set a Telegram username in Settings\\.\n\n` +
+          `_Your listings are tracked by your @username when you submit them\\._`,
+        { parse_mode: "MarkdownV2" }
+      );
+      return;
+    }
+
+    try {
+      const myDeals = await getDealsByTelegram(username);
+
+      if (myDeals.length === 0) {
+        await ctx.reply(
+          `📦 *My Deals*\n\n` +
+            `No active listings found for @${username.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`)}\\.\n\n` +
+            `Use /submit to post your first listing\\!`,
+          { parse_mode: "MarkdownV2" }
+        );
+        return;
+      }
+
+      const userEsc = username.replace(/[.!()[\]{}*_~`>#+=|]/g, (c) => `\\${c}`);
+      await ctx.reply(
+        `📦 *Your active listings* \\(@${userEsc}\\):`,
+        { parse_mode: "MarkdownV2" }
+      );
+
+      for (const deal of myDeals) {
+        await ctx.reply(formatDealMd(deal), { parse_mode: "MarkdownV2" });
+      }
+    } catch (err) {
+      console.error("[/mydeals] DB error:", err);
+      await ctx.reply(
+        `⚠️ Could not load your deals right now\\. Please try again in a moment\\.`,
+        { parse_mode: "MarkdownV2" }
+      );
+    }
+  });
+
+  // ─── /submit ──────────────────────────────────────────────────────────────
   _bot.command("submit", async (ctx) => {
     await ctx.reply(
       `📝 *List an Item for Sale*\n\n` +
@@ -128,14 +244,14 @@ export function getBot(): Bot {
         `*DESCRIPTION:* \\[brief description\\]\n` +
         `*CONTACT:* \\[phone / WhatsApp number\\]\n\n` +
         `Then send your photos in the next message\\.\n\n` +
-        `_Your listing will be reviewed and posted to the group within 2 hours\\._\n\n` +
+        `_Your listing will be reviewed and posted within 2 hours\\._\n\n` +
         `Or post directly in our Facebook group:\n` +
         `facebook\\.com/groups/255230365959060`,
       { parse_mode: "MarkdownV2" }
     );
   });
 
-  // /rate
+  // ─── /rate ────────────────────────────────────────────────────────────────
   _bot.command("rate", async (ctx) => {
     const keyboard = new InlineKeyboard()
       .text("⭐ 1", "rate_1")
@@ -166,11 +282,11 @@ export function getBot(): Bot {
     );
   });
 
-  // /report
+  // ─── /report ──────────────────────────────────────────────────────────────
   _bot.command("report", async (ctx) => {
     await ctx.reply(
       `🚨 *Report a Problem*\n\n` +
-        `Please describe your issue in a message using this format:\n\n` +
+        `Please describe your issue using this format:\n\n` +
         `*REPORT TYPE:* \\[Fake Listing / Scam / No Delivery / Other\\]\n` +
         `*SELLER NAME or PHONE:* \\[if known\\]\n` +
         `*DEAL AMOUNT:* UGX \\[amount\\]\n` +
@@ -182,21 +298,7 @@ export function getBot(): Bot {
     );
   });
 
-  // /mydeals
-  _bot.command("mydeals", async (ctx) => {
-    await ctx.reply(
-      `📦 *My Deals*\n\n` +
-        `Deal tracking is coming soon\\!\n\n` +
-        `For now, track your deals by:\n` +
-        `• Checking your Facebook group comments\n` +
-        `• Contacting your agent directly\n` +
-        `• DMing the page for deal status\n\n` +
-        `_Full deal tracking with status updates launches in Week 3\\._`,
-      { parse_mode: "MarkdownV2" }
-    );
-  });
-
-  // Catch-all for unrecognized messages
+  // ─── Catch-all ────────────────────────────────────────────────────────────
   _bot.on("message", async (ctx) => {
     await ctx.reply(
       `👋 I didn't understand that\\. Use /help to see all available commands\\.`,

@@ -145,3 +145,74 @@ export async function findAgentsByArea(query: string): Promise<Agent[]> {
     .orderBy(agents.verified, agents.name);
   return rows.map(toAgent);
 }
+
+export async function getAgentAreas(): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ area: agents.area })
+    .from(agents)
+    .where(eq(agents.active, true))
+    .orderBy(agents.area);
+  return rows.map((r) => r.area);
+}
+
+// ─── Bot-specific deal queries ─────────────────────────────────────────────────
+
+export async function countActiveDeals(): Promise<number> {
+  const rows = await db
+    .select({ id: deals.id })
+    .from(deals)
+    .where(eq(deals.status, "active"));
+  return rows.length;
+}
+
+export async function getDealsByTelegram(handle: string): Promise<Deal[]> {
+  const rows = await db
+    .select()
+    .from(deals)
+    .where(
+      and(
+        eq(deals.sellerTelegram, handle),
+        eq(deals.status, "active")
+      )
+    )
+    .orderBy(desc(deals.createdAt))
+    .limit(10);
+  return rows.map(toDeal);
+}
+
+// ─── MarkdownV2 formatting helpers ────────────────────────────────────────────
+// Telegram MarkdownV2 requires escaping: _ * [ ] ( ) ~ ` > # + - = | { } . !
+
+function escMd(s: string): string {
+  return s.replace(/[_*[\]()~`>#+=|{}.!\-]/g, (c) => `\\${c}`);
+}
+
+export function formatDealMd(deal: Deal): string {
+  const price = deal.price.toLocaleString("en-UG");
+  const verified = deal.verified ? "✅" : "🔲";
+  const desc =
+    deal.description.length > 120
+      ? deal.description.slice(0, 120) + "..."
+      : deal.description;
+  return (
+    `*${escMd(deal.title)}*\n` +
+    `💰 UGX ${escMd(price)}\n` +
+    `📍 ${escMd(deal.location)}\n` +
+    `👤 ${verified} ${escMd(deal.sellerName)} \\(@${escMd(deal.sellerTelegram)}\\)\n` +
+    `📝 ${escMd(desc)}\n` +
+    `🏷 ${escMd(deal.category)}`
+  );
+}
+
+export function formatAgentMd(agent: Agent): string {
+  const mtn = agent.mtn ? `MTN: ${escMd(agent.mtn)}` : "";
+  const airtel = agent.airtel ? `Airtel: ${escMd(agent.airtel)}` : "";
+  const numbers = [mtn, airtel].filter(Boolean).join(" \\| ");
+  return (
+    `👤 *${escMd(agent.name)}*\n` +
+    `📍 ${escMd(agent.area)} — ${escMd(agent.landmark)}\n` +
+    `💬 @${escMd(agent.telegram)}\n` +
+    (numbers ? `📱 ${numbers}\n` : "") +
+    `${agent.verified ? "✅ Verified agent" : "🔲 Pending verification"}`
+  );
+}
